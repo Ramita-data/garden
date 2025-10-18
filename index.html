@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whisper Garden Premium</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(to top, #a0e9ff, #fff7a0);
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  #info {
+    position: absolute;
+    top: 20px;
+    background: rgba(255,255,255,0.7);
+    padding: 10px 20px;
+    border-radius: 10px;
+    z-index: 2;
+  }
+  #premiumBtn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    z-index: 2;
+  }
+  #paypal-button-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 2;
+  }
+</style>
+</head>
+<body>
+<div id="info">Speak softly or hum to grow your garden 🌸🌿💧</div>
+<button id="premiumBtn">Unlock Premium ($10)</button>
+<canvas id="garden"></canvas>
+
+<!-- Relaxing sounds -->
+<audio id="birds" src="https://www.soundjay.com/nature/sounds/bird-chirping-1.mp3"></audio>
+<audio id="wind" src="https://www.soundjay.com/nature/sounds/wind-blowing-1.mp3"></audio>
+<audio id="water" src="https://www.soundjay.com/nature/sounds/water-stream-1.mp3"></audio>
+<audio id="rain" src="https://www.soundjay.com/nature/sounds/rain-01.mp3"></audio>
+<audio id="chime" src="https://www.soundjay.com/nature/sounds/bell-chime-1.mp3"></audio>
+
+<!-- PayPal SDK -->
+<script src="https://www.paypal.com/sdk/js?client-id=AWN094Iq1_otcV6ViOemcrZXO1rTfjOgjbng3r3EOOXZwkhTGlJNX-Pd1aLVaws_wbSpSlanDei1pXTP&currency=USD"></script>
+
+<script>
+const canvas = document.getElementById('garden');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let premiumUnlocked = false;
+const premiumBtn = document.getElementById('premiumBtn');
+
+// Flower images
+const flowerImages = [];
+const flowerSrc = [
+  'https://i.ibb.co/1mFjZxQ/flower1.png',
+  'https://i.ibb.co/f9Z7QjR/flower2.png',
+  'https://i.ibb.co/3T9Tj7F/flower3.png',
+  'https://i.ibb.co/w7pP7q0/flower4.png',
+  'https://i.ibb.co/5n4Sh4Z/flower5.png'
+];
+flowerSrc.forEach(src => { const img = new Image(); img.src = src; flowerImages.push(img); });
+
+// Legendary flowers
+const legendaryFlowersSrc = [
+  'https://i.ibb.co/7vH3rZ1/legendary1.png',
+  'https://i.ibb.co/YT9wG2M/legendary2.png',
+  'https://i.ibb.co/dKG6f5L/legendary3.png'
+];
+const legendaryImages = [];
+legendaryFlowersSrc.forEach(src => { const img = new Image(); img.src = src; legendaryImages.push(img); });
+
+// Sounds
+const sounds = {
+  birds: document.getElementById('birds'),
+  wind: document.getElementById('wind'),
+  water: document.getElementById('water'),
+  rain: document.getElementById('rain'),
+  chime: document.getElementById('chime')
+};
+
+let flowers = [];
+let lastSoundTime = 0;
+
+// Flower class
+function Flower(x, y, size, img, isLegendary=false) {
+  this.x = x;
+  this.y = y;
+  this.size = size;
+  this.img = img;
+  this.isLegendary = isLegendary;
+  this.sparkles = [];
+  if(isLegendary){
+    for(let i=0;i<5;i++){
+      this.sparkles.push({x:Math.random()*size - size/2, y:Math.random()*size - size, radius:Math.random()*2 + 1});
+    }
+  }
+  this.grow = function(amount){ this.size += amount; }
+  this.draw = function(){
+    ctx.drawImage(this.img, this.x - this.size/2, this.y - this.size, this.size, this.size);
+    if(this.isLegendary){
+      this.sparkles.forEach(s=>{
+        s.x += (Math.random()-0.5)*0.5;
+        s.y += (Math.random()-0.5)*0.5;
+        ctx.beginPath();
+        ctx.arc(this.x+s.x, this.y+s.y, s.radius,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,0.8)';
+        ctx.fill();
+      });
+    }
+  }
+}
+
+// Add flower based on volume
+function addFlower(volume){
+  let x = Math.random()*canvas.width;
+  let y = canvas.height-50;
+  let size = premiumUnlocked ? 50+volume*60 : 30+volume*50;
+  
+  let img, isLegendary=false;
+  if(premiumUnlocked && Math.random()<0.05){
+    img = legendaryImages[Math.floor(Math.random()*legendaryImages.length)];
+    size *= 1.5;
+    isLegendary = true;
+  } else {
+    img = flowerImages[Math.floor(Math.random()*flowerImages.length)];
+  }
+  flowers.push(new Flower(x,y,size,img,isLegendary));
+
+  // Sound cooldown
+  let now = Date.now();
+  if(now - lastSoundTime > 500){
+    if(volume<0.15) sounds.birds.play();
+    else if(volume<0.3) sounds.wind.play();
+    else if(volume<0.5) sounds.water.play();
+    else if(premiumUnlocked && volume>=0.5){ sounds.rain.play(); sounds.chime.play(); }
+    lastSoundTime = now;
+  }
+}
+
+// Animation
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  if(premiumUnlocked){
+    let gradient = ctx.createLinearGradient(0,0,0,canvas.height);
+    let time = new Date().getSeconds();
+    gradient.addColorStop(0, `rgba(${100+time*2},${200-time*2},255,1)`);
+    gradient.addColorStop(1,'#fff7a0');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  flowers.forEach(f=>{ f.grow(0.1); f.draw(); });
+  requestAnimationFrame(animate);
+}
+animate();
+
+// Handle window resize
+window.addEventListener('resize', ()=>{
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+// Microphone input
+navigator.mediaDevices.getUserMedia({audio:true})
+.then(stream=>{
+  const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  const source = audioCtx.createMediaStreamSource(stream);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize=256;
+  source.connect(analyser);
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  function detectVolume(){
+    analyser.getByteFrequencyData(dataArray);
+    let sum=0;
+    for(let i=0;i<dataArray.length;i++) sum+=dataArray[i];
+    let avg = sum/dataArray.length/255;
+    if(avg>0.05) addFlower(avg);
+    requestAnimationFrame(detectVolume);
+  }
+  detectVolume();
+})
+.catch(err=>alert('Microphone access is required!'));
+
+// PayPal integration
+paypal.Buttons({
+  style:{layout:'vertical', color:'gold', shape:'rect', label:'paypal'},
+  createOrder: (data, actions)=>{
+    return actions.order.create({purchase_units:[{amount:{value:'10.00'}, description:'Unlock Premium Whisper Garden Features'}]});
+  },
+  onApprove: (data, actions)=>{
+    return actions.order.capture().then(details=>{
+      premiumUnlocked=true;
+      alert('Premium unlocked! Enjoy extra flowers, legendary flowers, sounds, and dynamic backgrounds 🌸✨');
+      premiumBtn.style.display='none';
+    });
+  }
+}).render('#paypal-button-container');
+
+premiumBtn.addEventListener('click', ()=>{
+  document.getElementById('paypal-button-container').style.display='block';
+});
+</script>
+
+<div id="paypal-button-container" style="display:none;"></div>
+</body>
+</html>
